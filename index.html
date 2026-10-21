@@ -1,0 +1,1818 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#faf8ef">
+<meta name="description" content="打开即玩的单文件 2048 与扫雷，支持键盘、鼠标和手机操作。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%23bbada0%22/%3E%3Ctext x=%2232%22 y=%2243%22 text-anchor=%22middle%22 font-family=%22Arial%22 font-size=%2223%22 font-weight=%22bold%22 fill=%22%23f9f6f2%22%3E2048%3C/text%3E%3C/svg%3E">
+<title>2048 · 扫雷 · 小游戏</title>
+<style>
+  :root {
+    --bg: #faf8ef;
+    --board: #bbada0;
+    --empty: #cdc1b4;
+    --text: #776e65;
+    --muted: #8f7a66;
+    --paper: #f9f6f2;
+    --line: #d8cec2;
+    --pad: clamp(8px, 2.6vw, 12px);
+    --gap: clamp(8px, 2.6vw, 12px);
+    --radius: clamp(9px, 2.4vw, 13px);
+    --shadow: 0 22px 70px rgba(119, 110, 101, 0.16);
+  }
+
+  * { box-sizing: border-box; }
+
+  [hidden] { display: none !important; }
+
+  html, body { min-height: 100%; }
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+    padding: max(20px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(circle at 12% 4%, rgba(237, 207, 114, 0.22), transparent 28rem),
+      radial-gradient(circle at 88% 96%, rgba(143, 122, 102, 0.12), transparent 25rem),
+      var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button { font: inherit; }
+
+  .app { width: min(96vw, 900px); }
+
+  .topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 16px;
+  }
+
+  .brand h1 {
+    margin: 0;
+    font-size: clamp(46px, 13vw, 68px);
+    font-weight: 850;
+    line-height: 0.9;
+    letter-spacing: -0.07em;
+  }
+
+  .brand p {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font-size: clamp(13px, 3.4vw, 15px);
+    font-weight: 600;
+  }
+
+  .scores {
+    display: flex;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+
+  .score-card {
+    position: relative;
+    min-width: 86px;
+    padding: 8px 12px 9px;
+    border-radius: 10px;
+    background: var(--board);
+    color: var(--paper);
+    text-align: center;
+    box-shadow: 0 8px 20px rgba(119, 110, 101, 0.14);
+  }
+
+  .score-card span {
+    display: block;
+    color: #eee4da;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+  }
+
+  .score-card strong {
+    display: block;
+    margin-top: 2px;
+    font-size: clamp(19px, 5vw, 25px);
+    line-height: 1.05;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .score-pop {
+    position: absolute;
+    left: 50%;
+    top: 3px;
+    transform: translateX(-50%);
+    color: #f2b179;
+    font-size: 13px;
+    font-weight: 900;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .score-pop.show { animation: score-pop 0.62s ease-out; }
+
+  @keyframes score-pop {
+    0% { opacity: 0; transform: translate(-50%, 8px) scale(0.8); }
+    20% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -18px) scale(1); }
+  }
+
+  .toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 9px;
+    margin-bottom: 12px;
+  }
+
+  .btn {
+    min-height: 42px;
+    padding: 0 15px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(249, 246, 242, 0.82);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 750;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  }
+
+  .btn:hover { background: #f2eadf; border-color: #c9bcae; }
+  .btn:active { transform: translateY(1px) scale(0.99); }
+
+  .btn.primary {
+    border-color: transparent;
+    background: var(--muted);
+    color: var(--paper);
+  }
+
+  .btn.primary:hover { background: #9f8b77; }
+
+  .btn.icon {
+    width: 42px;
+    padding: 0;
+    font-size: 18px;
+  }
+
+  .btn:focus-visible,
+  .board:focus-visible {
+    outline: 3px solid rgba(242, 177, 121, 0.6);
+    outline-offset: 3px;
+  }
+
+  .board {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    padding: var(--pad);
+    border-radius: clamp(13px, 3.3vw, 18px);
+    background: var(--board);
+    box-shadow: var(--shadow);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    overflow: hidden;
+  }
+
+  .grid,
+  .tile-layer {
+    position: absolute;
+    inset: var(--pad);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: var(--gap);
+  }
+
+  .cell {
+    border-radius: var(--radius);
+    background: rgba(238, 228, 218, 0.36);
+  }
+
+  .tile-layer {
+    pointer-events: none;
+  }
+
+  .tile {
+    position: absolute;
+    top: 0;
+    left: 0;
+    transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
+    will-change: transform;
+  }
+
+  .tile-face {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius);
+    font-weight: 850;
+    line-height: 1;
+    letter-spacing: -0.045em;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+    will-change: transform;
+  }
+
+  .tile-face.spawn { animation: tile-spawn 0.16s ease-out; }
+  .tile-face.merge { animation: tile-merge 0.17s ease-out; }
+
+  @keyframes tile-spawn {
+    0% { opacity: 0; transform: scale(0.52); }
+    72% { opacity: 1; transform: scale(1.07); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes tile-merge {
+    0% { transform: scale(1); }
+    52% { transform: scale(1.13); }
+    100% { transform: scale(1); }
+  }
+
+  .hint {
+    margin: 12px 2px 0;
+    color: var(--muted);
+    font-size: clamp(11px, 2.9vw, 13px);
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+  }
+
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(77, 70, 64, 0.38);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
+  }
+
+  .modal-card {
+    position: relative;
+    width: min(92vw, 390px);
+    max-height: min(82svh, 620px);
+    overflow: auto;
+    padding: 24px;
+    border-radius: 18px;
+    background: var(--paper);
+    box-shadow: 0 28px 90px rgba(58, 52, 47, 0.28);
+    animation: modal-in 0.18s ease-out;
+  }
+
+  @keyframes modal-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .modal-card h2 {
+    margin: 0;
+    padding-right: 28px;
+    font-size: 25px;
+    line-height: 1.15;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 34px;
+    height: 34px;
+    border: 0;
+    border-radius: 50%;
+    background: #eee4da;
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .modal-body {
+    margin-top: 14px;
+    color: #6f665e;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .modal-body p { margin: 0 0 10px; }
+  .modal-body p:last-child { margin-bottom: 0; }
+
+  .modal-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 20px;
+  }
+
+  .modal-actions .btn { flex: 1 1 120px; }
+
+  .rank-list {
+    display: grid;
+    gap: 8px;
+    margin: 14px 0 0;
+  }
+
+  .rank-row {
+    display: grid;
+    grid-template-columns: 34px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #eee4da;
+  }
+
+  .rank-row .rank {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 850;
+  }
+
+  .rank-row .rank-score {
+    font-size: 19px;
+    font-weight: 850;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rank-row .rank-time {
+    display: block;
+    color: #9b9188;
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  .empty-rank {
+    padding: 22px 10px;
+    border-radius: 12px;
+    background: #eee4da;
+    color: var(--muted);
+    text-align: center;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .mode-tabs {
+    width: max-content;
+    margin: 0 auto 16px;
+    padding: 4px;
+    display: flex;
+    gap: 4px;
+    border-radius: 12px;
+    background: #eee4da;
+    box-shadow: inset 0 0 0 1px rgba(119, 110, 101, 0.07);
+  }
+
+  .mode-tab {
+    border: 0;
+    border-radius: 9px;
+    padding: 9px 20px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 850;
+    cursor: pointer;
+    transition: background 0.14s ease, color 0.14s ease, transform 0.12s ease;
+  }
+
+  .mode-tab:hover { background: rgba(249, 246, 242, 0.62); }
+  .mode-tab:active { transform: translateY(1px); }
+  .mode-tab.active {
+    background: var(--muted);
+    color: var(--paper);
+    box-shadow: 0 4px 14px rgba(119, 110, 101, 0.18);
+  }
+
+  #mode2048 {
+    width: min(100%, 520px);
+    margin: 0 auto;
+  }
+
+  #modeMines { width: 100%; }
+
+  body[data-mode="mines"] {
+    align-items: flex-start;
+    padding-top: max(20px, env(safe-area-inset-top));
+  }
+
+  .mines-topbar .brand h1 { letter-spacing: -0.055em; }
+  .mines-stats .score-card { min-width: 82px; }
+  .mines-stats strong { white-space: nowrap; }
+
+  .mines-toolbar {
+    grid-template-columns: minmax(118px, 1.2fr) minmax(108px, 1fr) 1fr auto;
+  }
+
+  .btn.active {
+    border-color: transparent;
+    background: var(--muted);
+    color: var(--paper);
+  }
+
+  .btn.select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 32px;
+    background-image:
+      linear-gradient(45deg, transparent 50%, #8f7a66 50%),
+      linear-gradient(135deg, #8f7a66 50%, transparent 50%);
+    background-position:
+      calc(100% - 17px) 18px,
+      calc(100% - 12px) 18px;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+
+  .mines-board-shell {
+    padding: 10px;
+    border-radius: clamp(13px, 3.3vw, 18px);
+    background: var(--board);
+    box-shadow: var(--shadow);
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .mines-board {
+    --cell: 34px;
+    --cols: 9;
+    --rows: 9;
+    display: grid;
+    grid-template-columns: repeat(var(--cols), var(--cell));
+    grid-template-rows: repeat(var(--rows), var(--cell));
+    gap: 3px;
+    width: max-content;
+    margin: 0 auto;
+    padding: 2px;
+    outline: none;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  .mines-board:focus-visible {
+    outline: 3px solid rgba(242, 177, 121, 0.7);
+    outline-offset: 4px;
+  }
+
+  .mines-board.flag-mode .ms-cell.covered { cursor: crosshair; }
+
+  .ms-cell {
+    width: var(--cell);
+    height: var(--cell);
+    padding: 0;
+    border: 0;
+    border-radius: calc(var(--cell) * 0.17);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+    font-size: calc(var(--cell) * 0.48);
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    transition: transform 0.08s ease, background 0.1s ease, box-shadow 0.1s ease;
+  }
+
+  .ms-cell.covered {
+    background: linear-gradient(145deg, #e8dfd4, #c8baac);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.66),
+      inset 0 -2px 0 rgba(119, 110, 101, 0.16);
+  }
+
+  .ms-cell.covered:hover { filter: brightness(1.035); }
+  .ms-cell.pressing { transform: scale(0.91); }
+
+  .ms-cell.revealed {
+    background: #eee4da;
+    box-shadow: inset 0 0 0 1px rgba(119, 110, 101, 0.06);
+    cursor: default;
+  }
+
+  .ms-cell.flagged { color: #c45b45; }
+  .ms-cell.revealed[data-n="1"] { color: #1976d2; }
+  .ms-cell.revealed[data-n="2"] { color: #388e3c; }
+  .ms-cell.revealed[data-n="3"] { color: #d32f2f; }
+  .ms-cell.revealed[data-n="4"] { color: #512da8; }
+  .ms-cell.revealed[data-n="5"] { color: #8d4b2d; }
+  .ms-cell.revealed[data-n="6"] { color: #00838f; }
+  .ms-cell.revealed[data-n="7"] { color: #37474f; }
+  .ms-cell.revealed[data-n="8"] { color: #6a1b9a; }
+
+  .ms-cell.mine.revealed {
+    background: #d35d4e;
+    color: #fff8f4;
+    box-shadow: none;
+  }
+
+  .ms-cell.wrong {
+    background: #eda298;
+    color: #7b2e25;
+    box-shadow: none;
+  }
+
+  .ms-cell.exploded {
+    outline: 3px solid #fff1ec;
+    outline-offset: -3px;
+    animation: mine-hit 0.28s ease-out;
+  }
+
+  @keyframes mine-hit {
+    0% { transform: scale(0.88); }
+    55% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+  }
+
+  .mines-board-shell::-webkit-scrollbar { height: 8px; }
+  .mines-board-shell::-webkit-scrollbar-thumb { background: rgba(119, 110, 101, 0.32); border-radius: 999px; }
+
+  @media (max-width: 620px) {
+    .mines-topbar {
+      align-items: stretch;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .mines-topbar .scores { justify-content: flex-end; }
+    .mines-toolbar { grid-template-columns: minmax(108px, 1.2fr) minmax(102px, 1fr) 1fr auto; }
+    .mines-stats .score-card { min-width: 0; flex: 1; }
+  }
+
+  @media (max-width: 430px) {
+    body { align-items: flex-start; padding-top: 18px; }
+    .topbar { align-items: center; }
+    .brand p { display: none; }
+    .score-card { min-width: 76px; padding-inline: 9px; }
+    .toolbar { grid-template-columns: 1fr 1fr auto; }
+    .btn { padding-inline: 10px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body data-mode="2048">
+<main class="app" aria-label="2048 与扫雷小游戏合集">
+  <nav class="mode-tabs" aria-label="选择游戏">
+    <button id="tab2048" class="mode-tab active" type="button" role="tab" aria-selected="true" aria-controls="mode2048">2048</button>
+    <button id="tabMines" class="mode-tab" type="button" role="tab" aria-selected="false" aria-controls="modeMines">扫雷</button>
+  </nav>
+
+  <section id="mode2048" class="game-panel" role="tabpanel" aria-labelledby="tab2048">
+    <header class="topbar">
+      <div class="brand">
+        <h1>2048</h1>
+        <p>合并数字，拼出 2048</p>
+      </div>
+      <div class="scores" aria-label="分数">
+        <div class="score-card">
+          <span>得分</span>
+          <strong id="score">0</strong>
+          <span id="scorePop" class="score-pop" aria-hidden="true"></span>
+        </div>
+        <div class="score-card">
+          <span>最高</span>
+          <strong id="best">0</strong>
+        </div>
+      </div>
+    </header>
+
+    <div class="toolbar">
+      <button id="newGame" class="btn primary" type="button">新游戏</button>
+      <button id="leaderboard" class="btn" type="button">本机排行</button>
+      <button id="help" class="btn icon" type="button" aria-label="查看玩法">?</button>
+    </div>
+
+    <section id="board" class="board" tabindex="0" role="application" aria-label="2048 棋盘，使用方向键或滑动操作">
+      <div id="grid" class="grid" aria-hidden="true">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+      </div>
+      <div id="tileLayer" class="tile-layer"></div>
+    </section>
+
+    <p class="hint">方向键 / WASD 移动 · R 重开 · 手机可滑动</p>
+  </section>
+
+  <section id="modeMines" class="game-panel" role="tabpanel" aria-labelledby="tabMines" hidden>
+    <header class="topbar mines-topbar">
+      <div class="brand">
+        <h1>扫雷</h1>
+        <p>翻开安全格，找出所有地雷</p>
+      </div>
+      <div class="scores mines-stats" aria-label="扫雷状态">
+        <div class="score-card">
+          <span>剩余雷</span>
+          <strong id="msMines">10</strong>
+        </div>
+        <div class="score-card">
+          <span>时间</span>
+          <strong id="msTimer">000</strong>
+        </div>
+        <div class="score-card">
+          <span>最佳</span>
+          <strong id="msBest">--</strong>
+        </div>
+      </div>
+    </header>
+
+    <div class="toolbar mines-toolbar">
+      <select id="msDifficulty" class="btn select" aria-label="扫雷难度">
+        <option value="beginner">初级 · 9×9</option>
+        <option value="intermediate">中级 · 16×16</option>
+        <option value="expert">高级 · 30×16</option>
+      </select>
+      <button id="msFlagMode" class="btn" type="button" aria-pressed="false">⚑ 插旗模式</button>
+      <button id="msNewGame" class="btn primary" type="button">重开</button>
+      <button id="msHelp" class="btn icon" type="button" aria-label="查看扫雷玩法">?</button>
+    </div>
+
+    <div class="mines-board-shell">
+      <div id="msBoard" class="mines-board" role="grid" tabindex="0" aria-label="扫雷棋盘" aria-rowcount="9" aria-colcount="9"></div>
+    </div>
+
+    <p id="msStatus" class="hint" aria-live="polite">左键翻开 · 右键或长按插旗 · 手机可开启插旗模式</p>
+  </section>
+</main>
+
+<div id="modal" class="modal" hidden>
+  <div id="modalBackdrop" class="modal-backdrop"></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button id="modalClose" class="modal-close" type="button" aria-label="关闭">×</button>
+    <h2 id="modalTitle"></h2>
+    <div id="modalBody" class="modal-body"></div>
+    <div id="modalActions" class="modal-actions"></div>
+  </div>
+</div>
+
+<p id="live" class="sr-only" aria-live="polite"></p>
+
+<script>
+(() => {
+  "use strict";
+
+  const SIZE = 4;
+  const SWIPE_MIN = 24;
+  const BEST_KEY = "js2048_best_v1";
+  const SCORES_KEY = "js2048_scores_v1";
+  const MOVE_MS = 130;
+  const COLORS = {
+    2: "#eee4da",
+    4: "#ede0c8",
+    8: "#f2b179",
+    16: "#f59563",
+    32: "#f67c5f",
+    64: "#f65e3b",
+    128: "#edcf72",
+    256: "#edcc61",
+    512: "#edc850",
+    1024: "#edc53f",
+    2048: "#edc22e"
+  };
+
+  const board = document.getElementById("board");
+  const gridEl = document.getElementById("grid");
+  const tileLayer = document.getElementById("tileLayer");
+  const scoreEl = document.getElementById("score");
+  const bestEl = document.getElementById("best");
+  const scorePop = document.getElementById("scorePop");
+  const live = document.getElementById("live");
+  const modal = document.getElementById("modal");
+  const modalBackdrop = document.getElementById("modalBackdrop");
+  const modalClose = document.getElementById("modalClose");
+  const modalTitle = document.getElementById("modalTitle");
+  const modalBody = document.getElementById("modalBody");
+  const modalActions = document.getElementById("modalActions");
+
+  let grid = emptyGrid();
+  let tiles = [];
+  let score = 0;
+  let best = readNumber(BEST_KEY);
+  let tileId = 0;
+  let tileSize = 0;
+  let gapSize = 0;
+  let animating = false;
+  let gameOver = false;
+  let winShown = false;
+  let runRecorded = false;
+  let modalOpen = false;
+  let modalDismissible = true;
+  let previousFocus = null;
+  let moveTimer = null;
+  let pointerStart = null;
+
+  bestEl.textContent = String(best);
+
+  function emptyGrid() {
+    return Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+  }
+
+  function readNumber(key) {
+    try {
+      const value = Number(localStorage.getItem(key) || 0);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function writeStorage(key, value) {
+    try { localStorage.setItem(key, String(value)); } catch { /* ignored */ }
+  }
+
+  function loadScores() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(SCORES_KEY) || "[]");
+      if (!Array.isArray(raw)) return [];
+      return raw
+        .filter((item) => item && Number.isFinite(Number(item.score)))
+        .map((item) => ({
+          score: Math.max(0, Math.floor(Number(item.score))),
+          time: String(item.time || "")
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+    } catch {
+      return [];
+    }
+  }
+
+  function saveScores(records) {
+    try { localStorage.setItem(SCORES_KEY, JSON.stringify(records.slice(0, 5))); } catch { /* ignored */ }
+  }
+
+  function summarizeGrid() {
+    return grid.map((row) => row.join(" ")).join(" | ");
+  }
+
+  function announce(message) {
+    live.textContent = "";
+    requestAnimationFrame(() => { live.textContent = message; });
+  }
+
+  function palette(value) {
+    if (value <= 4) return { bg: COLORS[value], fg: "#776e65" };
+    if (value <= 2048) return { bg: COLORS[value], fg: "#f9f6f2" };
+    return { bg: "#3c3a32", fg: "#f9f6f2" };
+  }
+
+  function updateScore(gain) {
+    scoreEl.textContent = String(score);
+    if (score > best) {
+      best = score;
+      bestEl.textContent = String(best);
+      writeStorage(BEST_KEY, best);
+    }
+
+    if (gain > 0) {
+      scorePop.textContent = "+" + gain;
+      scorePop.classList.remove("show");
+      void scorePop.offsetWidth;
+      scorePop.classList.add("show");
+    }
+  }
+
+  function measureBoard() {
+    const boardStyle = getComputedStyle(board);
+    const gridStyle = getComputedStyle(gridEl);
+    const pad = parseFloat(boardStyle.paddingLeft) || 0;
+    gapSize = parseFloat(gridStyle.columnGap) || 0;
+    const inner = Math.max(0, board.clientWidth - pad * 2);
+    tileSize = Math.max(0, (inner - gapSize * (SIZE - 1)) / SIZE);
+  }
+
+  function layoutTiles(instant = false) {
+    measureBoard();
+    if (!tileSize) return;
+
+    for (const tile of tiles) {
+      const digits = String(tile.value).length;
+      const factor = digits <= 2 ? 0.47 : digits === 3 ? 0.39 : 0.31;
+      tile.face.style.fontSize = Math.max(15, tileSize * factor) + "px";
+      tile.el.style.width = tileSize + "px";
+      tile.el.style.height = tileSize + "px";
+      positionTile(tile, instant);
+    }
+  }
+
+  function positionTile(tile, instant = false) {
+    if (!tileSize) return;
+    const x = tile.c * (tileSize + gapSize);
+    const y = tile.r * (tileSize + gapSize);
+    if (instant) {
+      tile.el.style.transition = "none";
+      tile.el.style.transform = "translate3d(" + x + "px," + y + "px,0)";
+      requestAnimationFrame(() => { tile.el.style.transition = ""; });
+    } else {
+      tile.el.style.transform = "translate3d(" + x + "px," + y + "px,0)";
+    }
+  }
+
+  function updateTileFace(tile) {
+    const color = palette(tile.value);
+    tile.face.textContent = String(tile.value);
+    tile.face.style.background = color.bg;
+    tile.face.style.color = color.fg;
+    const digits = String(tile.value).length;
+    const factor = digits <= 2 ? 0.47 : digits === 3 ? 0.39 : 0.31;
+    tile.face.style.fontSize = Math.max(15, tileSize * factor) + "px";
+  }
+
+  function createTile(value, r, c, spawn = true) {
+    const tile = {
+      id: ++tileId,
+      value,
+      r,
+      c,
+      el: document.createElement("div"),
+      face: document.createElement("div"),
+      removed: false,
+      target: null
+    };
+
+    tile.el.className = "tile";
+    tile.face.className = "tile-face";
+    tile.el.appendChild(tile.face);
+    tileLayer.appendChild(tile.el);
+    tile.face.addEventListener("animationend", () => {
+      tile.face.classList.remove("spawn", "merge");
+    });
+
+    updateTileFace(tile);
+    tile.el.style.width = tileSize + "px";
+    tile.el.style.height = tileSize + "px";
+    positionTile(tile, true);
+
+    if (spawn) {
+      requestAnimationFrame(() => tile.face.classList.add("spawn"));
+    }
+
+    tiles.push(tile);
+    return tile;
+  }
+
+  function addRandomTile() {
+    const empty = [];
+    for (let r = 0; r < SIZE; r += 1) {
+      for (let c = 0; c < SIZE; c += 1) {
+        if (grid[r][c] === 0) empty.push([r, c]);
+      }
+    }
+    if (!empty.length) return null;
+
+    const [r, c] = empty[Math.floor(Math.random() * empty.length)];
+    const value = Math.random() < 0.9 ? 2 : 4;
+    grid[r][c] = value;
+    return createTile(value, r, c, true);
+  }
+
+  function lineCoordinates(direction) {
+    const lines = [];
+    if (direction === "left" || direction === "right") {
+      for (let r = 0; r < SIZE; r += 1) {
+        const line = [];
+        for (let c = 0; c < SIZE; c += 1) line.push([r, c]);
+        if (direction === "right") line.reverse();
+        lines.push(line);
+      }
+    } else {
+      for (let c = 0; c < SIZE; c += 1) {
+        const line = [];
+        for (let r = 0; r < SIZE; r += 1) line.push([r, c]);
+        if (direction === "down") line.reverse();
+        lines.push(line);
+      }
+    }
+    return lines;
+  }
+
+  function computeMove(direction) {
+    const byCell = new Map();
+    for (const tile of tiles) byCell.set(tile.r + "," + tile.c, tile);
+
+    const next = emptyGrid();
+    let moved = false;
+    let gain = 0;
+
+    for (const line of lineCoordinates(direction)) {
+      const lineTiles = line.map(([r, c]) => byCell.get(r + "," + c)).filter(Boolean);
+      let target = 0;
+      let i = 0;
+
+      while (i < lineTiles.length) {
+        const first = lineTiles[i];
+        const second = lineTiles[i + 1];
+        const [tr, tc] = line[target];
+
+        if (second && first.value === second.value) {
+          const mergedValue = first.value * 2;
+          next[tr][tc] = mergedValue;
+          first.target = { r: tr, c: tc, value: mergedValue, merge: true, consumed: false };
+          second.target = { r: tr, c: tc, value: mergedValue, merge: false, consumed: true };
+          gain += mergedValue;
+          moved = true;
+          target += 1;
+          i += 2;
+        } else {
+          next[tr][tc] = first.value;
+          first.target = { r: tr, c: tc, value: first.value, merge: false, consumed: false };
+          if (first.r !== tr || first.c !== tc) moved = true;
+          target += 1;
+          i += 1;
+        }
+      }
+    }
+
+    return { next, moved, gain };
+  }
+
+  function move(direction) {
+    if (animating || gameOver || modalOpen) return;
+
+    const result = computeMove(direction);
+    if (!result.moved) {
+      if (!canMove()) endGame();
+      return;
+    }
+
+    animating = true;
+    score += result.gain;
+    updateScore(result.gain);
+    grid = result.next;
+
+    for (const tile of tiles) {
+      if (!tile.target) continue;
+      tile.r = tile.target.r;
+      tile.c = tile.target.c;
+      positionTile(tile);
+      tile.el.style.zIndex = tile.target.merge ? "4" : tile.target.consumed ? "3" : "1";
+    }
+
+    moveTimer = window.setTimeout(() => {
+      moveTimer = null;
+      finishMove();
+    }, MOVE_MS);
+  }
+
+  function finishMove() {
+    for (const tile of tiles) {
+      if (!tile.target) continue;
+      if (tile.target.consumed) {
+        tile.removed = true;
+        tile.el.remove();
+      } else if (tile.target.merge && tile.value !== tile.target.value) {
+        tile.value = tile.target.value;
+        updateTileFace(tile);
+        tile.face.classList.remove("merge");
+        void tile.face.offsetWidth;
+        tile.face.classList.add("merge");
+      }
+      tile.target = null;
+    }
+
+    tiles = tiles.filter((tile) => !tile.removed);
+    addRandomTile();
+    animating = false;
+
+    if (!winShown && tiles.some((tile) => tile.value >= 2048)) {
+      winShown = true;
+      announce("你拼出了 2048。");
+      openModal({
+        title: "拼出 2048 了！",
+        body: document.createTextNode("你已经达到 2048，可以继续挑战更高的数字。"),
+        actions: [
+          { label: "继续游戏", primary: true, onClick: hideModal },
+          { label: "新游戏", onClick: newGame }
+        ],
+        dismissible: false
+      });
+    } else if (!canMove()) {
+      endGame();
+    }
+
+    board.focus({ preventScroll: true });
+  }
+
+  function canMove() {
+    for (let r = 0; r < SIZE; r += 1) {
+      for (let c = 0; c < SIZE; c += 1) {
+        if (grid[r][c] === 0) return true;
+        if (c + 1 < SIZE && grid[r][c] === grid[r][c + 1]) return true;
+        if (r + 1 < SIZE && grid[r][c] === grid[r + 1][c]) return true;
+      }
+    }
+    return false;
+  }
+
+  function recordRun() {
+    if (runRecorded || score <= 0) return;
+    const records = loadScores();
+    records.push({
+      score,
+      time: new Date().toLocaleString("zh-CN", {
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hour12: false
+      })
+    });
+    records.sort((a, b) => b.score - a.score);
+    saveScores(records);
+    runRecorded = true;
+  }
+
+  function endGame() {
+    if (gameOver) return;
+    gameOver = true;
+    recordRun();
+    announce("游戏结束，本局得分 " + score + "。");
+    openModal({
+      title: "游戏结束",
+      body: buildEndBody(),
+      actions: [
+        { label: "再来一局", primary: true, onClick: newGame },
+        { label: "查看排行", onClick: showLeaderboard }
+      ],
+      dismissible: false
+    });
+  }
+
+  function buildEndBody() {
+    const wrap = document.createElement("div");
+    const text = document.createElement("p");
+    text.textContent = "没有可以移动的方块了。";
+    const value = document.createElement("p");
+    value.innerHTML = "本局得分：<strong></strong>";
+    value.querySelector("strong").textContent = String(score);
+    wrap.append(text, value);
+    return wrap;
+  }
+
+  function newGame() {
+    if (moveTimer !== null) {
+      clearTimeout(moveTimer);
+      moveTimer = null;
+    }
+    if (!gameOver) recordRun();
+    hideModal();
+    modalOpen = false;
+    gameOver = false;
+    winShown = false;
+    runRecorded = false;
+    animating = false;
+    score = 0;
+    tiles = [];
+    grid = emptyGrid();
+    tileLayer.replaceChildren();
+    updateScore(0);
+
+    measureBoard();
+    addRandomTile();
+    addRandomTile();
+    layoutTiles(true);
+    board.focus({ preventScroll: true });
+    announce("新游戏开始。棋盘：" + summarizeGrid());
+  }
+
+  function fillModal(title, body, actions, dismissible) {
+    modalTitle.textContent = title;
+    modalBody.replaceChildren();
+    if (body instanceof Node) modalBody.appendChild(body);
+    else modalBody.textContent = body;
+
+    modalActions.replaceChildren();
+    for (const action of actions) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn" + (action.primary ? " primary" : "");
+      button.textContent = action.label;
+      button.addEventListener("click", action.onClick);
+      modalActions.appendChild(button);
+    }
+
+    modalClose.hidden = !dismissible;
+    modalDismissible = dismissible;
+  }
+
+  function openModal({ title, body, actions, dismissible = true }) {
+    if (!modalOpen) previousFocus = document.activeElement;
+    fillModal(title, body, actions, dismissible);
+    modalOpen = true;
+    modal.hidden = false;
+    requestAnimationFrame(() => {
+      const first = modalActions.querySelector("button") || modalClose;
+      first.focus({ preventScroll: true });
+    });
+  }
+
+  function hideModal() {
+    if (!modalOpen) return;
+    modalOpen = false;
+    modal.hidden = true;
+    if (previousFocus && typeof previousFocus.focus === "function") {
+      previousFocus.focus({ preventScroll: true });
+    }
+  }
+
+  function showHelp() {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = [
+      "<p><strong>目标</strong>：滑动方块，让相同数字合并，拼出 2048。</p>",
+      "<p><strong>操作</strong>：电脑使用方向键或 WASD；手机直接在棋盘上滑动。</p>",
+      "<p><strong>快捷键</strong>：按 R 随时重新开始。</p>",
+      "<p><strong>排行</strong>：当前版本只会记录在这台设备和这个浏览器里。</p>"
+    ].join("");
+    openModal({
+      title: "怎么玩",
+      body: wrap,
+      actions: [{ label: "知道了", primary: true, onClick: hideModal }],
+      dismissible: true
+    });
+  }
+
+  function showLeaderboard() {
+    const records = loadScores();
+    const wrap = document.createElement("div");
+    if (!records.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-rank";
+      empty.textContent = "还没有记录，先玩一局吧。";
+      wrap.appendChild(empty);
+    } else {
+      const list = document.createElement("div");
+      list.className = "rank-list";
+      records.forEach((record, index) => {
+        const row = document.createElement("div");
+        row.className = "rank-row";
+
+        const rank = document.createElement("div");
+        rank.className = "rank";
+        rank.textContent = "#" + (index + 1);
+
+        const scoreWrap = document.createElement("div");
+        const scoreValue = document.createElement("span");
+        scoreValue.className = "rank-score";
+        scoreValue.textContent = String(record.score);
+        const time = document.createElement("span");
+        time.className = "rank-time";
+        time.textContent = record.time || "本机记录";
+        scoreWrap.append(scoreValue, time);
+
+        const note = document.createElement("div");
+        note.className = "rank-time";
+        note.textContent = index === 0 ? "最高" : "";
+
+        row.append(rank, scoreWrap, note);
+        list.appendChild(row);
+      });
+      wrap.appendChild(list);
+    }
+
+    const tip = document.createElement("p");
+    tip.style.marginTop = "12px";
+    tip.style.fontSize = "12px";
+    tip.style.color = "#9b9188";
+    tip.textContent = "排行仅保存在当前浏览器，不会自动同步给群友。";
+    wrap.appendChild(tip);
+
+    openModal({
+      title: "本机排行",
+      body: wrap,
+      actions: [{ label: "关闭", primary: true, onClick: hideModal }],
+      dismissible: true
+    });
+  }
+
+  function directionFromKey(key) {
+    const normalized = key.toLowerCase();
+    if (key === "ArrowLeft" || normalized === "a") return "left";
+    if (key === "ArrowRight" || normalized === "d") return "right";
+    if (key === "ArrowUp" || normalized === "w") return "up";
+    if (key === "ArrowDown" || normalized === "s") return "down";
+    return null;
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (modalOpen) {
+      if (event.key === "Escape" && modalDismissible) {
+        event.preventDefault();
+        hideModal();
+      }
+      return;
+    }
+
+    if (activeMode === "mines") {
+      if (event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        msNewGame();
+      } else if (event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        msToggleFlagMode();
+      }
+      return;
+    }
+
+    if (event.key.toLowerCase() === "r") {
+      event.preventDefault();
+      newGame();
+      return;
+    }
+
+    const direction = directionFromKey(event.key);
+    if (direction) {
+      event.preventDefault();
+      move(direction);
+    }
+  });
+
+  board.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || modalOpen || animating || gameOver) return;
+    pointerStart = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    board.setPointerCapture(event.pointerId);
+  });
+
+  board.addEventListener("pointerup", (event) => {
+    if (!pointerStart || pointerStart.id !== event.pointerId) return;
+    const dx = event.clientX - pointerStart.x;
+    const dy = event.clientY - pointerStart.y;
+    pointerStart = null;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_MIN) return;
+    if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? "right" : "left");
+    else move(dy > 0 ? "down" : "up");
+  });
+
+  board.addEventListener("pointercancel", () => { pointerStart = null; });
+  board.addEventListener("contextmenu", (event) => event.preventDefault());
+
+  document.getElementById("newGame").addEventListener("click", newGame);
+  document.getElementById("leaderboard").addEventListener("click", showLeaderboard);
+  document.getElementById("help").addEventListener("click", showHelp);
+  modalClose.addEventListener("click", hideModal);
+  modalBackdrop.addEventListener("click", () => { if (modalDismissible) hideModal(); });
+
+
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(() => layoutTiles(true)).observe(board);
+  } else {
+    window.addEventListener("resize", () => layoutTiles(true));
+  }
+
+  /* ---------- 扫雷模式 ---------- */
+
+  const mode2048El = document.getElementById("mode2048");
+  const modeMinesEl = document.getElementById("modeMines");
+  const tab2048 = document.getElementById("tab2048");
+  const tabMines = document.getElementById("tabMines");
+  const msBoardEl = document.getElementById("msBoard");
+  const msDifficultyEl = document.getElementById("msDifficulty");
+  const msFlagModeBtn = document.getElementById("msFlagMode");
+  const msNewGameBtn = document.getElementById("msNewGame");
+  const msHelpBtn = document.getElementById("msHelp");
+  const msMinesEl = document.getElementById("msMines");
+  const msTimerEl = document.getElementById("msTimer");
+  const msBestEl = document.getElementById("msBest");
+  const msStatusEl = document.getElementById("msStatus");
+
+  const MS_BEST_KEY = "js_mines_best_v1";
+  const MS_LONG_PRESS_MS = 450;
+  const MS_DIFFICULTIES = {
+    beginner: { label: "初级", rows: 9, cols: 9, mines: 10, cell: 34 },
+    intermediate: { label: "中级", rows: 16, cols: 16, mines: 40, cell: 27 },
+    expert: { label: "高级", rows: 16, cols: 30, mines: 99, cell: 24 }
+  };
+
+  let activeMode = "2048";
+  let msDifficulty = "beginner";
+  let msRows = 9;
+  let msCols = 9;
+  let msMineCount = 10;
+  let msData = [];
+  let msCellEls = [];
+  let msStarted = false;
+  let msFinished = false;
+  let msFlagMode = false;
+  let msStartTime = 0;
+  let msElapsed = 0;
+  let msTimerId = null;
+  let msPress = null;
+  let msLongPressTimer = null;
+  let msSuppressClick = false;
+  let msLastLongPress = null;
+  let msBestTimes = msLoadBestTimes();
+
+  function msLoadBestTimes() {
+    try {
+      const data = JSON.parse(localStorage.getItem(MS_BEST_KEY) || "{}");
+      if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+      const clean = {};
+      for (const [key, value] of Object.entries(data)) {
+        const number = Number(value);
+        if (MS_DIFFICULTIES[key] && Number.isFinite(number) && number > 0) {
+          clean[key] = Math.floor(number);
+        }
+      }
+      return clean;
+    } catch {
+      return {};
+    }
+  }
+
+  function msSaveBestTimes() {
+    try { localStorage.setItem(MS_BEST_KEY, JSON.stringify(msBestTimes)); } catch { /* ignored */ }
+  }
+
+  function msFormatTime(seconds) {
+    const value = Math.max(0, Math.floor(Number(seconds) || 0));
+    return value > 999 ? "999+" : String(value).padStart(3, "0");
+  }
+
+  function msCurrentBest() {
+    return Number(msBestTimes[msDifficulty]) || 0;
+  }
+
+  function msUpdateHud() {
+    let flags = 0;
+    for (const row of msData) {
+      for (const cell of row) if (cell.flagged) flags += 1;
+    }
+    msMinesEl.textContent = String(msMineCount - flags);
+    msTimerEl.textContent = msFormatTime(msElapsed);
+    const best = msCurrentBest();
+    msBestEl.textContent = best ? msFormatTime(best) : "--";
+  }
+
+  function msUpdateFlagButton() {
+    msFlagModeBtn.classList.toggle("active", msFlagMode);
+    msFlagModeBtn.setAttribute("aria-pressed", String(msFlagMode));
+    msFlagModeBtn.textContent = msFlagMode ? "⚑ 插旗中" : "⚑ 插旗模式";
+    msBoardEl.classList.toggle("flag-mode", msFlagMode);
+  }
+
+  function msClearLongPress() {
+    if (msLongPressTimer !== null) {
+      clearTimeout(msLongPressTimer);
+      msLongPressTimer = null;
+    }
+    if (msPress && msPress.cell) msPress.cell.classList.remove("pressing");
+    msPress = null;
+  }
+
+  function msStopTimer() {
+    if (msTimerId !== null) {
+      clearInterval(msTimerId);
+      msTimerId = null;
+    }
+    if (msStarted) {
+      msElapsed = Math.max(0, Math.floor((Date.now() - msStartTime) / 1000));
+    }
+    msUpdateHud();
+  }
+
+  function msStartTimer() {
+    if (msTimerId !== null) return;
+    msStarted = true;
+    msStartTime = Date.now() - msElapsed * 1000;
+    msTimerId = window.setInterval(() => {
+      msElapsed = Math.max(0, Math.floor((Date.now() - msStartTime) / 1000));
+      msUpdateHud();
+    }, 200);
+  }
+
+  function msReset() {
+    msStopTimer();
+    const config = MS_DIFFICULTIES[msDifficulty] || MS_DIFFICULTIES.beginner;
+    msRows = config.rows;
+    msCols = config.cols;
+    msMineCount = config.mines;
+    msStarted = false;
+    msFinished = false;
+    msElapsed = 0;
+    msStartTime = 0;
+    msClearLongPress();
+    msSuppressClick = false;
+    msData = Array.from({ length: msRows }, () =>
+      Array.from({ length: msCols }, () => ({
+        mine: false,
+        revealed: false,
+        flagged: false,
+        adjacent: 0,
+        exploded: false,
+        wrong: false
+      }))
+    );
+    msCellEls = [];
+    msBoardEl.replaceChildren();
+    msBoardEl.style.setProperty("--rows", String(msRows));
+    msBoardEl.style.setProperty("--cols", String(msCols));
+    msBoardEl.style.setProperty("--cell", config.cell + "px");
+    msBoardEl.setAttribute("aria-rowcount", String(msRows));
+    msBoardEl.setAttribute("aria-colcount", String(msCols));
+
+    for (let r = 0; r < msRows; r += 1) {
+      const rowEls = [];
+      for (let c = 0; c < msCols; c += 1) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "ms-cell covered";
+        button.dataset.r = String(r);
+        button.dataset.c = String(c);
+        button.setAttribute("role", "gridcell");
+        button.setAttribute("aria-label", "第 " + (r + 1) + " 行第 " + (c + 1) + " 列，未翻开");
+        msBoardEl.appendChild(button);
+        rowEls.push(button);
+      }
+      msCellEls.push(rowEls);
+    }
+
+    msStatusEl.textContent = "左键翻开 · 右键或长按插旗 · 手机可开启插旗模式";
+    msUpdateHud();
+    msUpdateFlagButton();
+  }
+
+  function msPlaceMines(safeRow, safeCol) {
+    const safe = new Set();
+    for (let dr = -1; dr <= 1; dr += 1) {
+      for (let dc = -1; dc <= 1; dc += 1) {
+        const r = safeRow + dr;
+        const c = safeCol + dc;
+        if (r >= 0 && r < msRows && c >= 0 && c < msCols) safe.add(r * msCols + c);
+      }
+    }
+
+    let candidates = [];
+    for (let r = 0; r < msRows; r += 1) {
+      for (let c = 0; c < msCols; c += 1) {
+        const index = r * msCols + c;
+        if (!safe.has(index)) candidates.push([r, c]);
+      }
+    }
+
+    if (candidates.length < msMineCount) {
+      candidates = [];
+      for (let r = 0; r < msRows; r += 1) {
+        for (let c = 0; c < msCols; c += 1) {
+          if (r !== safeRow || c !== safeCol) candidates.push([r, c]);
+        }
+      }
+    }
+
+    for (let i = candidates.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+
+    for (let i = 0; i < msMineCount && i < candidates.length; i += 1) {
+      const [r, c] = candidates[i];
+      msData[r][c].mine = true;
+    }
+
+    for (let r = 0; r < msRows; r += 1) {
+      for (let c = 0; c < msCols; c += 1) {
+        if (msData[r][c].mine) continue;
+        let count = 0;
+        for (let dr = -1; dr <= 1; dr += 1) {
+          for (let dc = -1; dc <= 1; dc += 1) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = r + dr;
+            const nc = c + dc;
+            if (nr >= 0 && nr < msRows && nc >= 0 && nc < msCols && msData[nr][nc].mine) count += 1;
+          }
+        }
+        msData[r][c].adjacent = count;
+      }
+    }
+  }
+
+  function msRenderCell(r, c) {
+    if (msData[r][c].wrong) {
+      msCellEls[r][c].className = "ms-cell covered flagged wrong";
+      msCellEls[r][c].textContent = "×";
+      msCellEls[r][c].dataset.n = "";
+      msCellEls[r][c].setAttribute("aria-label", "第 " + (r + 1) + " 行第 " + (c + 1) + " 列，插错旗帜");
+      return;
+    }
+
+    if (msData[r][c].revealed) {
+      msCellEls[r][c].className = "ms-cell revealed" + (msData[r][c].mine ? " mine" : "") + (msData[r][c].exploded ? " exploded" : "");
+      msCellEls[r][c].textContent = msData[r][c].mine ? "✹" : msData[r][c].adjacent ? String(msData[r][c].adjacent) : "";
+      msCellEls[r][c].dataset.n = msData[r][c].adjacent ? String(msData[r][c].adjacent) : "";
+      msCellEls[r][c].setAttribute(
+        "aria-label",
+        "第 " + (r + 1) + " 行第 " + (c + 1) + " 列，" +
+        (msData[r][c].mine ? "地雷" : msData[r][c].adjacent ? "周围 " + msData[r][c].adjacent + " 个雷" : "空白")
+      );
+      return;
+    }
+
+    msCellEls[r][c].className = "ms-cell covered" + (msData[r][c].flagged ? " flagged" : "");
+    msCellEls[r][c].textContent = msData[r][c].flagged ? "⚑" : "";
+    msCellEls[r][c].dataset.n = "";
+    msCellEls[r][c].setAttribute(
+      "aria-label",
+      "第 " + (r + 1) + " 行第 " + (c + 1) + " 列，" + (msData[r][c].flagged ? "已插旗" : "未翻开")
+    );
+  }
+
+  function msToggleFlag(r, c) {
+    if (msFinished) return;
+    const cell = msData[r][c];
+    if (!cell || cell.revealed) return;
+    cell.flagged = !cell.flagged;
+    msRenderCell(r, c);
+    msUpdateHud();
+    announce(cell.flagged ? "已插旗。" : "已取消旗帜。");
+  }
+
+  function msFloodReveal(startRow, startCol) {
+    const stack = [[startRow, startCol]];
+    while (stack.length) {
+      const [r, c] = stack.pop();
+      if (r < 0 || r >= msRows || c < 0 || c >= msCols) continue;
+      const cell = msData[r][c];
+      if (cell.revealed || cell.flagged || cell.mine) continue;
+      cell.revealed = true;
+      msRenderCell(r, c);
+      if (cell.adjacent === 0) {
+        for (let dr = -1; dr <= 1; dr += 1) {
+          for (let dc = -1; dc <= 1; dc += 1) {
+            if (dr !== 0 || dc !== 0) stack.push([r + dr, c + dc]);
+          }
+        }
+      }
+    }
+  }
+
+  function msReveal(r, c) {
+    if (msFinished) return;
+    const cell = msData[r][c];
+    if (!cell || cell.flagged || cell.revealed) return;
+
+    if (!msStarted) {
+      msPlaceMines(r, c);
+      msStartTimer();
+    }
+
+    if (cell.mine) {
+      msLose(r, c);
+      return;
+    }
+
+    msFloodReveal(r, c);
+    msCheckWin();
+  }
+
+  function msCheckWin() {
+    let revealed = 0;
+    for (const row of msData) {
+      for (const cell of row) if (cell.revealed && !cell.mine) revealed += 1;
+    }
+    const safeTotal = msRows * msCols - msMineCount;
+    if (revealed !== safeTotal) return;
+
+    msFinished = true;
+    msStopTimer();
+    for (let r = 0; r < msRows; r += 1) {
+      for (let c = 0; c < msCols; c += 1) {
+        if (msData[r][c].mine) {
+          msData[r][c].flagged = true;
+          msRenderCell(r, c);
+        }
+      }
+    }
+    msUpdateHud();
+
+    const seconds = Math.max(1, msElapsed);
+    const previousBest = msCurrentBest();
+    const isBest = !previousBest || seconds < previousBest;
+    if (isBest) {
+      msBestTimes[msDifficulty] = seconds;
+      msSaveBestTimes();
+      msUpdateHud();
+    }
+
+    msStatusEl.textContent = "扫雷成功，用时 " + msFormatTime(seconds) + " 秒。";
+    announce("扫雷成功，用时 " + seconds + " 秒。");
+    const body = document.createElement("div");
+    const result = document.createElement("p");
+    result.textContent = "你找出了全部 " + msMineCount + " 个地雷，用时 " + seconds + " 秒。";
+    const best = document.createElement("p");
+    best.textContent = isBest ? "这是当前难度的新纪录。" : "当前难度最佳：" + msFormatTime(previousBest) + " 秒。";
+    body.append(result, best);
+    openModal({
+      title: "扫雷成功",
+      body,
+      actions: [
+        { label: "再来一局", primary: true, onClick: msNewGame },
+        { label: "关闭", onClick: hideModal }
+      ],
+      dismissible: false
+    });
+  }
+
+  function msLose(hitRow, hitCol) {
+    if (msFinished) return;
+    msFinished = true;
+    msStopTimer();
+    msData[hitRow][hitCol].exploded = true;
+
+    for (let r = 0; r < msRows; r += 1) {
+      for (let c = 0; c < msCols; c += 1) {
+        const cell = msData[r][c];
+        if (cell.mine && !cell.flagged) cell.revealed = true;
+        if (cell.flagged && !cell.mine) cell.wrong = true;
+        msRenderCell(r, c);
+      }
+    }
+    msUpdateHud();
+    msStatusEl.textContent = "踩到地雷了。点击重开再试一次。";
+    announce("踩到地雷了，游戏结束。");
+    const body = document.createElement("div");
+    const text = document.createElement("p");
+    text.textContent = "踩到地雷了。本局用时 " + msFormatTime(msElapsed) + " 秒。";
+    body.appendChild(text);
+    openModal({
+      title: "扫雷失败",
+      body,
+      actions: [
+        { label: "再来一局", primary: true, onClick: msNewGame },
+        { label: "关闭", onClick: hideModal }
+      ],
+      dismissible: false
+    });
+  }
+
+  function msNewGame() {
+    hideModal();
+    msReset();
+    msBoardEl.focus({ preventScroll: true });
+    announce("新扫雷游戏开始。" + MS_DIFFICULTIES[msDifficulty].label + "难度。");
+  }
+
+  function msToggleFlagMode() {
+    msFlagMode = !msFlagMode;
+    msUpdateFlagButton();
+    announce(msFlagMode ? "插旗模式已开启。" : "插旗模式已关闭。");
+  }
+
+  function msShowHelp() {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = [
+      "<p><strong>目标</strong>：翻开所有非地雷格子。</p>",
+      "<p><strong>操作</strong>：点击或轻触翻开；右键或长按插旗；手机也可以先开启“插旗模式”。</p>",
+      "<p><strong>数字</strong>：表示该格周围八个格子中的地雷数量。</p>",
+      "<p><strong>快捷键</strong>：R 重开，F 切换插旗模式。</p>",
+      "<p><strong>最佳成绩</strong>：按难度分别保存在当前浏览器。</p>"
+    ].join("");
+    openModal({
+      title: "扫雷怎么玩",
+      body: wrap,
+      actions: [{ label: "知道了", primary: true, onClick: hideModal }],
+      dismissible: true
+    });
+  }
+
+  function setMode(mode) {
+    if (mode === activeMode) return;
+    if (activeMode === "2048" && animating && mode === "mines") return;
+    hideModal();
+    activeMode = mode;
+    document.body.dataset.mode = mode;
+    mode2048El.hidden = mode !== "2048";
+    modeMinesEl.hidden = mode !== "mines";
+    tab2048.classList.toggle("active", mode === "2048");
+    tabMines.classList.toggle("active", mode === "mines");
+    tab2048.setAttribute("aria-selected", String(mode === "2048"));
+    tabMines.setAttribute("aria-selected", String(mode === "mines"));
+    document.title = mode === "2048" ? "2048 · 合并数字" : "扫雷 · 小游戏";
+    if (mode === "2048") {
+      if (gameOver) newGame();
+      else board.focus({ preventScroll: true });
+      announce("已切换到 2048。");
+    } else {
+      msBoardEl.focus({ preventScroll: true });
+      announce("已切换到扫雷。");
+    }
+  }
+
+  tab2048.addEventListener("click", () => setMode("2048"));
+  tabMines.addEventListener("click", () => setMode("mines"));
+  msDifficultyEl.addEventListener("change", () => {
+    msDifficulty = msDifficultyEl.value;
+    msNewGame();
+    announce("已切换为" + MS_DIFFICULTIES[msDifficulty].label + "难度。");
+  });
+  msFlagModeBtn.addEventListener("click", msToggleFlagMode);
+  msNewGameBtn.addEventListener("click", msNewGame);
+  msHelpBtn.addEventListener("click", msShowHelp);
+
+  msBoardEl.addEventListener("click", (event) => {
+    const target = event.target.closest(".ms-cell");
+    if (!target || !msBoardEl.contains(target)) return;
+    if (msSuppressClick) {
+      msSuppressClick = false;
+      return;
+    }
+    const r = Number(target.dataset.r);
+    const c = Number(target.dataset.c);
+    if (msFlagMode) msToggleFlag(r, c);
+    else msReveal(r, c);
+  });
+
+  msBoardEl.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    msClearLongPress();
+    const target = event.target.closest(".ms-cell");
+    if (!target) return;
+    const r = Number(target.dataset.r);
+    const c = Number(target.dataset.c);
+    if (msLastLongPress && msLastLongPress.r === r && msLastLongPress.c === c && Date.now() - msLastLongPress.time < 700) {
+      msLastLongPress = null;
+      return;
+    }
+    msToggleFlag(r, c);
+  });
+
+  msBoardEl.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || msFinished) return;
+    const target = event.target.closest(".ms-cell");
+    if (!target) return;
+    msClearLongPress();
+    msPress = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      r: Number(target.dataset.r),
+      c: Number(target.dataset.c),
+      cell: target
+    };
+    target.classList.add("pressing");
+    msLongPressTimer = window.setTimeout(() => {
+      if (!msPress) return;
+      const r = msPress.r;
+      const c = msPress.c;
+      const cell = msPress.cell;
+      msPress = null;
+      msLongPressTimer = null;
+      cell.classList.remove("pressing");
+      msToggleFlag(r, c);
+      msLastLongPress = { r, c, time: Date.now() };
+      msSuppressClick = true;
+      window.setTimeout(() => { msSuppressClick = false; }, 350);
+      if (navigator.vibrate) navigator.vibrate(18);
+    }, MS_LONG_PRESS_MS);
+  });
+
+  msBoardEl.addEventListener("pointermove", (event) => {
+    if (!msPress || msPress.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - msPress.x, event.clientY - msPress.y) > 10) msClearLongPress();
+  });
+
+  msBoardEl.addEventListener("pointerup", msClearLongPress);
+  msBoardEl.addEventListener("pointercancel", msClearLongPress);
+  msBoardEl.addEventListener("pointerleave", msClearLongPress);
+
+  msReset();
+
+  requestAnimationFrame(() => {
+    measureBoard();
+    newGame();
+  });
+})();
+</script>
+</body>
+</html>
+
